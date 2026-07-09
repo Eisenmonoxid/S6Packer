@@ -6,12 +6,13 @@ A simple command line application that unpacks and packs archive files (.bba|.s6
 ## Usage
 Unpack: Launch the executable with the path to the .bba|.s6map|.s6xmap file as argument.   
 Pack: Launch the executable with the path to the folder (ends with `_Extracted`) and `--Type: ` as arguments.   
-(e.g. `S6Packer.exe C:\\Usermap_Extracted --Type: .s6xmap`)
+(e.g. `S6Packer.exe "C:\Usermap_Extracted" "--Type: .s6xmap"`)   
+On Windows, `"--Type: .s6xmap"` needs to be enclosed in quotation marks, otherwise the application cannot parse the arguments correctly.
 
 For example:
 ```
-"C:\Settlers\S6Packer.exe C:\Settlers\Maps.bba" -- Unpacks the content of the archive file Maps.bba into a folder called Maps_Extracted
-"C:\Settlers\S6Packer.exe C:\Settlers\Usermap_Extracted --Type: .s6xmap" -- Packs the contents of Usermap_Extracted into Usermap.s6xmap
+C:\Settlers\S6Packer.exe "C:\Settlers\Maps.bba" -- Unpacks the content of the archive file Maps.bba into a folder called Maps_Extracted
+C:\Settlers\S6Packer.exe "C:\Settlers\Usermap_Extracted" "--Type: .s6xmap" -- Packs the contents of Usermap_Extracted into Usermap.s6xmap
 ```
 
 ## Features
