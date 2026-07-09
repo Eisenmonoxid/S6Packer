@@ -7,8 +7,10 @@ using System.Runtime.InteropServices;
 
 namespace S6Packer.Source
 {
+    #if S6PACKER_STANDALONE_COMPILATION
 	internal class Program
 	{
+        
         static void Main(string[] args)
 		{
 			Console.ForegroundColor = ConsoleColor.White;
@@ -148,4 +150,5 @@ namespace S6Packer.Source
 			return Stream;
         }
 	}
+    #endif
 }

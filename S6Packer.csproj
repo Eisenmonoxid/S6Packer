@@ -56,4 +56,8 @@
     	<PackageReference Include="System.IO.Hashing" Version="10.0.9" />
 	</ItemGroup>
 
+	<PropertyGroup>
+  		<DefineConstants>$(DefineConstants);S6PACKER_STANDALONE_COMPILATION</DefineConstants>
+	</PropertyGroup>
+
 </Project>
