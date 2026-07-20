@@ -74,15 +74,9 @@ namespace S6Packer.Source
 			return CRC.GetCurrentHashAsUInt32();
 		}
 
-		public static string GetArchiveFileFromArgs(string[] args)
-		{
-			string FilePath = args.FirstOrDefault(Element => Element.EndsWith(".bba") || Element.EndsWith(".s6map") || Element.EndsWith(".s6xmap"));
-			if (File.Exists(FilePath))
-			{
-				return FilePath;
-			}
-
-			return default;
-		}
+		public static string GetArchiveFileFromArgs(string[] args) => 
+			args.FirstOrDefault(Element => 
+				[".bba", ".s6map", ".s6xmap", ".s6savegame", ".s6xsavegame"].Any(Extension => 
+					Element.EndsWith(Extension, StringComparison.OrdinalIgnoreCase)) && File.Exists(Element));
     }
 }

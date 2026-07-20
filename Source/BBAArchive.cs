@@ -1,8 +1,4 @@
-using System;
 using System.Buffers.Binary;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -23,10 +19,10 @@ namespace S6Packer.Source
 		public BBAArchiveFile(Stream Archive, bool ArchiveFileOrMap)
 		{
 			ArchiveStream = Archive;
-			GlobalArchiveReader = new(ArchiveStream);
-			ArchiveStream.Seek(0, SeekOrigin.Begin);
-
 			IsArchiveFileOrMap = ArchiveFileOrMap;
+
+			GlobalArchiveReader = new(ArchiveStream);
+			ArchiveStream.Seek(GetDataStartOffset(GlobalArchiveReader), SeekOrigin.Begin);
 
 			GlobalHeader = new BBAHeader(GlobalArchiveReader.ReadBytes(BBAHeader.Size));
 
@@ -71,6 +67,23 @@ namespace S6Packer.Source
 
 			MemoryStream FileDataStream = PackFolderFilesIntoArchiveFile(Entries, FolderPath);
 			WriteBBAArchiveFileMetadata(FileDataStream);
+		}
+
+		private UInt32 GetDataStartOffset(BinaryReader Reader)
+		{
+			byte[] ID = [0x52, 0x47, 0x4D, 0x48];
+			byte[] Buffer = new byte[ID.Length];
+
+			Reader.BaseStream.Seek(0, SeekOrigin.Begin);
+			Reader.ReadExactly(Buffer);
+			
+			if (!ID.SequenceEqual(Buffer))
+			{
+				return 0x0;
+			}
+
+			Reader.BaseStream.Seek(0x8, SeekOrigin.Begin);
+			return Reader.ReadUInt32();
 		}
 
 		public void LinkHashTableEntriesToDataEntries()
