@@ -87,7 +87,11 @@ namespace S6Packer.Source
 			}
 
 			Reader.BaseStream.Seek(0x8, SeekOrigin.Begin);
-			return Reader.ReadUInt32(); // Some files seem to be offset by 9 instead of 8
+			UInt32 Offset = Reader.ReadUInt32();
+			Reader.BaseStream.Seek(Offset, SeekOrigin.Begin);
+			
+			byte Element = Reader.ReadByte();
+			return Element == 0x0 ? Offset + 0x1 : Offset;
 		}
 
 		public void LinkHashTableEntriesToDataEntries()
