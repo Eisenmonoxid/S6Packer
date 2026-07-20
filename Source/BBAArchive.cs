@@ -1,4 +1,8 @@
+using System;
 using System.Buffers.Binary;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -83,7 +87,7 @@ namespace S6Packer.Source
 			}
 
 			Reader.BaseStream.Seek(0x8, SeekOrigin.Begin);
-			return Reader.ReadUInt32();
+			return Reader.ReadUInt32(); // Some files seem to be offset by 9 instead of 8
 		}
 
 		public void LinkHashTableEntriesToDataEntries()
