@@ -19,6 +19,7 @@ namespace S6Packer.Source
 		private readonly BBAFileHashTable GlobalHashTable;
 		private readonly Stream ArchiveStream;
 		private readonly BinaryReader GlobalArchiveReader;
+		public void LinkHashTableEntriesToDataEntries() => GlobalHashTable.LinkHashTableEntriesToDataEntries(GlobalFileData.AsSpan());
 
 		public BBAArchiveFile(Stream Archive, bool ArchiveFileOrMap)
 		{
@@ -92,11 +93,6 @@ namespace S6Packer.Source
 			
 			byte Element = Reader.ReadByte();
 			return Element == 0x0 ? Offset + 0x1 : Offset;
-		}
-
-		public void LinkHashTableEntriesToDataEntries()
-		{
-			GlobalHashTable.LinkHashTableEntriesToDataEntries(GlobalFileData.AsSpan());
 		}
 
 		private void ParseDataEntriesFromHeader(ReadOnlySpan<byte> Data, uint AmountOfFiles)
@@ -249,8 +245,8 @@ namespace S6Packer.Source
 			Span<BBAArchiveFileHeaderDefinition> FileHeaderDefinition = MemoryMarshal.CreateSpan(ref FileHeader, 1);
             Span<UInt32> Header = MemoryMarshal.Cast<BBAArchiveFileHeaderDefinition, UInt32>(FileHeaderDefinition);
 
-			Header[2] = BinaryPrimitives.ReadUInt32LittleEndian(Data[0..USize]);
-			Header[3] = BinaryPrimitives.ReadUInt32LittleEndian(Data[USize..(USize * 2)]);
+			Header[2] = BinaryPrimitives.ReadUInt32LittleEndian(Data[.. USize]);
+			Header[3] = BinaryPrimitives.ReadUInt32LittleEndian(Data[USize .. (USize * 2)]);
 
 			Crypt.EncryptFileHeader(Header, Entry);
 			return MemoryMarshal.AsBytes(Header).ToArray();
@@ -334,8 +330,8 @@ namespace S6Packer.Source
 
 			byte[] Source = GlobalArchiveReader.ReadBytes((int)Definition.CompressedFileSize);
 
-			BinaryPrimitives.WriteUInt32LittleEndian(Source.AsSpan()[..USize], Data[2]);
-			BinaryPrimitives.WriteUInt32LittleEndian(Source.AsSpan()[USize..(USize * 2)], Data[3]);
+			BinaryPrimitives.WriteUInt32LittleEndian(Source.AsSpan()[.. USize], Data[2]);
+			BinaryPrimitives.WriteUInt32LittleEndian(Source.AsSpan()[USize .. (USize * 2)], Data[3]);
 
 			return BBACompression.Decompress(Source, (int)Definition.DecompressedFileSize);
 		}
