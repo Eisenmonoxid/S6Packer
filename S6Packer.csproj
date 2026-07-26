@@ -41,11 +41,11 @@
 	<PropertyGroup>
 		<ApplicationIcon>favicon.ico</ApplicationIcon>
 		<ProduceReferenceAssembly>False</ProduceReferenceAssembly>
-		<AssemblyVersion>1.0.0.0</AssemblyVersion>
-		<FileVersion>1.0.0.0</FileVersion>
+		<AssemblyVersion>1.1.0.0</AssemblyVersion>
+		<FileVersion>1.1.0.0</FileVersion>
 		<NuGetAudit>False</NuGetAudit>
 		<Authors>Eisenmonoxid</Authors>
-		<Version>1</Version>
+		<Version>1.1</Version>
 		<Company>Eisenmonoxid</Company>
 	</PropertyGroup>
 
@@ -53,7 +53,7 @@
 		<Content Include="favicon.ico" />
 	</ItemGroup>
   	<ItemGroup>
-    	<PackageReference Include="System.IO.Hashing" Version="10.0.9" />
+    	<PackageReference Include="System.IO.Hashing" Version="10.0.10" />
 	</ItemGroup>
 
 	<PropertyGroup>
