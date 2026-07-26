@@ -50,7 +50,7 @@ namespace S6Packer.Source
     			HashTableData[HashTableIndex].CRC32 = Hash;
     			HashTableData[HashTableIndex].Offset = Offset;
 
-				Offset += DataEntry.GetPaddedSize();
+				Offset += BBADataEntry.GetPaddedSize(DataEntry.GetDefinition().FileNameLength);
 			}
 			
 			return MemoryMarshal.AsBytes(HashTableData.AsSpan());

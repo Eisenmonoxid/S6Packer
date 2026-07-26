@@ -37,7 +37,7 @@ namespace S6Packer.Source
 			Definition = Utility.Parse<BBADirectoryDefinition>(Data);
 		}
 
-		public BBADirectory(bool IsBBAFile, UInt32 OffsetFileEntries, UInt32 OffsetFileHashtable, UInt32 NumberOfFiles)
+		public BBADirectory(bool IsArchiveFileOrMap, UInt32 OffsetFileHashtable, UInt32 NumberOfFiles)
 		{
 			Definition = new BBADirectoryDefinition()
 			{
@@ -46,9 +46,9 @@ namespace S6Packer.Source
 				Unknown5 = 5,
 				HeaderSize2 = 64,
 				HeaderEncryptionID = Crypt.S6_HEAD_CRYPTID,
-				DirectoryEncryptionID =  IsBBAFile ? Crypt.S6_BBA_CRYPTID : Crypt.S6_MAP_CRYPTID,
+				DirectoryEncryptionID =  IsArchiveFileOrMap ? Crypt.S6_BBA_CRYPTID : Crypt.S6_MAP_CRYPTID,
 				Unknown1 = 0xD1C81BB5,
-				OffsetFileEntries = OffsetFileEntries,
+				OffsetFileEntries = (uint)Size - 4, // 272
 				OffsetFileHashtable = OffsetFileHashtable,
 				NumberOfFiles = NumberOfFiles
 			};
@@ -64,11 +64,6 @@ namespace S6Packer.Source
 				{
 					new Span<UInt32>(Pointer, 8)[1] = Crypt.S6_FILE_CRYPTID;
 				}
-
-				Utility.FillBufferWithZeroes(ref Definition.Null1[0], 52);
-				Utility.FillBufferWithZeroes(ref Definition.Null2[0], 16);
-				Utility.FillBufferWithZeroes(ref Definition.Null3[0], 40);
-				Utility.FillBufferWithZeroes(ref Definition.Null4[0], 96);
 			}
 		}
 	}

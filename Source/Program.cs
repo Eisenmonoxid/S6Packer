@@ -30,7 +30,7 @@ namespace S6Packer.Source
             }
             else
             {
-                string FolderPath = args.FirstOrDefault(Element => Element.EndsWith("_Extracted") && Directory.Exists(Element));
+                string FolderPath = args.FirstOrDefault(Element => Directory.Exists(Element));
                 string FileExtension = args.FirstOrDefault(Element => Element.StartsWith("--Type: "));
                 if (FolderPath != default && FileExtension != default)
                 {

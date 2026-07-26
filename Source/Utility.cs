@@ -51,14 +51,6 @@ namespace S6Packer.Source
 			return Buffer.AsSpan();
 		}
 
-		public static unsafe void FillBufferWithZeroes(ref byte Buffer, int Length)
-		{
-			fixed (byte* Pointer = &Buffer)
-			{
-				new Span<byte>(Pointer, Length).Clear();
-			}
-		}
-
 		public static UInt32 GetCRC32OfData(ReadOnlySpan<byte> Data)
 		{
 			Crc32 CRC = new();

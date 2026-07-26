@@ -3,6 +3,8 @@ using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Reflection.PortableExecutable;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -64,12 +66,15 @@ namespace S6Packer.Source
 
 			IsArchiveFileOrMap = FileExtension == ".bba";
 
-			List<string> Entries = Utility.GetFiles(FolderPath);
-			GlobalFileData = new BBADataEntry[Entries.Count + 1];
+			DirEntry Root = TreeReader.ReadRootFolder(FolderPath);
+			List<DirEntry> Entries = TreeReader.BuildLinearList(Root);
+
+			GlobalFileData = new BBADataEntry[Entries.Count];
 
 			uint HashTableSize = BBAFileHashTable.CalculateHashTableSize((uint)Entries.Count);
 			GlobalHashTable = new BBAFileHashTable(HashTableSize);
 
+			CalculateDirectoryOffsets(Entries, FolderPath);
 			MemoryStream FileDataStream = PackFolderFilesIntoArchiveFile(Entries, FolderPath);
 			WriteBBAArchiveFileMetadata(FileDataStream);
 		}
@@ -102,9 +107,7 @@ namespace S6Packer.Source
 			{
 				BBADataEntry Element = new(Data[FileEntryOffset..]);
 				GlobalFileData[i] = Element;
-
-				int Padding = (int)(4 - (Element.GetDefinition().FileNameLength % 4));
-				FileEntryOffset += (int)(BBADataEntry.Size + Element.GetDefinition().FileNameLength + Padding);
+				FileEntryOffset += (int)BBADataEntry.GetPaddedSize(Element.GetDefinition().FileNameLength);
 			}
 		}
 
@@ -162,29 +165,43 @@ namespace S6Packer.Source
 			Console.WriteLine("\n[INFO] All files extracted to: " + ArchiveOutputDirectoryPath);
 		}
 
-		public MemoryStream PackFolderFilesIntoArchiveFile(List<string> Entries, string FolderPath)
+		private void CalculateDirectoryOffsets(List<DirEntry> Entries, string FolderPath)
+		{
+			uint DirectoryOffset = 0;
+			foreach (var Element in Entries.AsEnumerable().Reverse())
+			{
+				Element.DirOffset = (int)DirectoryOffset;
+				string SanitizedPath = Utility.SanitizePath(FolderPath, Path.Combine(FolderPath, Element.Path));
+				DirectoryOffset += BBADataEntry.GetPaddedSizeByName(SanitizedPath);
+			}
+		}
+
+		public MemoryStream PackFolderFilesIntoArchiveFile(List<DirEntry> Entries, string FolderPath)
         {
-            uint Offset = 1;
+            uint Offset = 0;
 			uint FileOffset = 0;
 			int FHOffset = sizeof(UInt32) * 2; // 8 bytes for compressed file header
 
 			Span<byte> DummyBuffer = new byte[FHOffset];
 			DummyBuffer.Clear();
 
-			GlobalFileData[0] = CreateBBADataEntryForDirectory(FolderPath, "."); // Root directory entry
-
 			MemoryStream FileDataStream = new();
-			foreach (var Element in Entries)
+			foreach (var Element in Entries.AsEnumerable().Reverse())
 			{
 				BBADataEntry Entry;
-                if (File.Exists(Element))
+				string ElementPath = Path.Combine(FolderPath, Element.Path);
+
+                if (File.Exists(ElementPath))
                 {
-					byte[] Data = File.ReadAllBytes(Element);
-					Entry = CreateBBADataEntry(Data, FolderPath, Element);
+					byte[] Data = File.ReadAllBytes(ElementPath);
+					Entry = CreateBBADataEntry(Data, FolderPath, ElementPath);
 					ref BBADataEntryDefinition Definition = ref Entry.GetDefinition();
 
 					if (Data.Length == 0)
 					{
+						Definition.FirstChild = Element.FirstChild?.DirOffset ?? -1;
+						Definition.NextSibling = Element.NextSibling?.DirOffset ?? -1;
+
 						GlobalFileData[Offset++] = Entry;
 						continue;
 					}
@@ -214,17 +231,20 @@ namespace S6Packer.Source
 
 					Definition.FileOffset = FileOffset;
 					FileOffset += Definition.CompressedFileSize;
-					Definition.NextSibling = (int)FileOffset;
 				}
-				else if (Directory.Exists(Element))
+				else if (Directory.Exists(ElementPath))
 				{
-					Entry = CreateBBADataEntryForDirectory(FolderPath, Element);
+					Entry = CreateBBADataEntryForDirectory(FolderPath, ElementPath);
 				}
 				else				
 				{
-					Console.WriteLine("[ERROR] File or directory " + Element + " does not exist! Skipping ...");
+					Console.WriteLine("[ERROR] File or directory " + Element.Path + " does not exist! Skipping ...");
 					return FileDataStream;
 				}
+
+				ref BBADataEntryDefinition CurrentDefinition = ref Entry.GetDefinition();
+				CurrentDefinition.FirstChild = Element.FirstChild?.DirOffset ?? -1;
+				CurrentDefinition.NextSibling = Element.NextSibling?.DirOffset ?? -1;
 
 				GlobalFileData[Offset++] = Entry;
 			}
@@ -268,7 +288,7 @@ namespace S6Packer.Source
 			Definition.FileType = BBADataEntry.IsCompressed(Path.GetExtension(ElementPath)) 
 				? (uint)BBADataEntry.BBAArchiveFileType.Compressed : (uint)BBADataEntry.BBAArchiveFileType.None;
 			Definition.FileNameLength = (uint)SanitizedPath.Length;
-			Definition.FileNameOffset = (uint)SanitizedPath.Count(C => C == '\\');
+			Definition.FileNameOffset = (uint)(SanitizedPath.LastIndexOf('\\') + 1);
 
 			return DataEntry;
         }
@@ -287,7 +307,7 @@ namespace S6Packer.Source
 			Definition.CompressedCRC32 = 0;
 			Definition.FileType = (uint)BBADataEntry.BBAArchiveFileType.Directory;
 			Definition.FileNameLength = (uint)SanitizedPath.Length;
-			Definition.FileNameOffset = (uint)SanitizedPath.Count(C => C == '\\');
+			Definition.FileNameOffset = (uint)(SanitizedPath.LastIndexOf('\\') + 1);
 
 			return DataEntry;
         }
@@ -346,7 +366,12 @@ namespace S6Packer.Source
 			{
 				BBADataEntry DataEntry = GlobalFileData[i];
 				ref BBADataEntryDefinition Definition = ref DataEntry.GetDefinition();
-				Definition.FileOffset += FileEntryOffset;
+
+				if (Definition.FileType != (uint)BBADataEntry.BBAArchiveFileType.Directory)
+				{
+					Definition.FileOffset += FileEntryOffset;
+				}
+
 				Writer.Write(DataEntry.Serialize());
 			}
 
@@ -359,15 +384,13 @@ namespace S6Packer.Source
 			using BinaryWriter Writer = new(Memory);
 
 			Writer.BaseStream.Seek(BBADirectory.Size, SeekOrigin.Begin);
-
-			Writer.Write(SerializedFileData.Length);
 			Writer.Write(SerializedFileData);
 
 			uint HashTableOffset = (uint)Writer.BaseStream.Position;
 			Writer.Write(SerializedHashTableData.Length / Utility.GetSerializedSize<BBAArchiveHashTableEntryDefinition>());
 			Writer.Write(SerializedHashTableData);
 
-			BBADirectory Directory = new(IsBBAFile, (uint)BBADirectory.Size, HashTableOffset, (uint)GlobalFileData.Length);
+			BBADirectory Directory = new(IsBBAFile, HashTableOffset, (uint)GlobalFileData.Length);
 			Writer.BaseStream.Seek(0, SeekOrigin.Begin);
 			Writer.Write(Directory.Serialize());
 
@@ -377,6 +400,7 @@ namespace S6Packer.Source
 		private byte[] GetEncryptedFileDictionary(bool IsBBAFile, byte[] CompressedHeaderBytes, Span<byte> CompressedHeaderData)
 		{
 			byte[] FileDictionary = [..CompressedHeaderBytes, ..CompressedHeaderData];
+
 			int Length = FileDictionary.Length;
 			int Padding = Length % 4;
 			if (Padding != 0)

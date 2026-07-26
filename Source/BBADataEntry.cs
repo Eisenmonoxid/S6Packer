@@ -43,7 +43,8 @@ namespace S6Packer.Source
 		public ref BBADataEntryDefinition GetDefinition() => ref Definition;
 		public static readonly int Size = Utility.GetSerializedSize<BBADataEntryDefinition>();
 		public static UInt64 GetTimeStamp(DateTime Date) => BitConverter.ToUInt64(BitConverter.GetBytes(Date.Ticks), 0);
-		public uint GetPaddedSize() => (uint)(Size + Definition.FileNameLength + (4 - (Definition.FileNameLength % 4)));
+		public static uint GetPaddedSizeByName(string Name) => GetPaddedSize((uint)Name.Length);
+		public static uint GetPaddedSize(uint Length) => (uint)(Size + Length + (4 - (Length % 4)));
 
 		public BBADataEntry(ReadOnlySpan<byte> Data)
 		{
@@ -55,19 +56,12 @@ namespace S6Packer.Source
 		{
 			FileName = Name;
 			Definition = new BBADataEntryDefinition();
-
-			unsafe
-			{
-				Utility.FillBufferWithZeroes(ref Definition.Null1[0], 4);
-				Utility.FillBufferWithZeroes(ref Definition.Null2[0], 4);
-				Utility.FillBufferWithZeroes(ref Definition.Null3[0], 8);
-			}
 		}
 
         public ReadOnlySpan<byte> Serialize()
 		{
 			byte[] Name = Encoding.ASCII.GetBytes(FileName);
-			Span<byte> Result = Utility.Serialize(Definition, (int)GetPaddedSize());
+			Span<byte> Result = Utility.Serialize(Definition, (int)GetPaddedSize(Definition.FileNameLength));
 			Name.CopyTo(Result[Size..]);
 			return Result;
 		}

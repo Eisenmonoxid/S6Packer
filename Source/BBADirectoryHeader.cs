@@ -27,7 +27,7 @@ namespace S6Packer.Source
 			Definition = Utility.Parse<BBADirectoryHeaderDefinition>(Data);
 		}
 
-		public BBADirectoryHeader(bool IsBBAArchiveFile, UInt32 Offset, UInt32 Length, UInt32 CRC32)
+		public BBADirectoryHeader(bool IsArchiveFileOrMap, UInt32 Offset, UInt32 Length, UInt32 CRC32)
 		{
 			Definition = new BBADirectoryHeaderDefinition()
 			{
@@ -35,14 +35,9 @@ namespace S6Packer.Source
 				Null = 0,
 				Length = Length,
 				CRC32 = CRC32,
-				EncryptionID = IsBBAArchiveFile ? Crypt.S6_BBA_CRYPTID : Crypt.S6_MAP_CRYPTID,
+				EncryptionID = IsArchiveFileOrMap ? Crypt.S6_BBA_CRYPTID : Crypt.S6_MAP_CRYPTID,
 				Unknown1 = 0xD1C81BB5
 			};
-
-			unsafe
-			{
-				Utility.FillBufferWithZeroes(ref Definition.Unknown2[0], 40);
-			}
 		}
 	}
 }
