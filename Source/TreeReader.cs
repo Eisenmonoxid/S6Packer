@@ -18,6 +18,7 @@ namespace S6Packer.Source
             return RootEntry;
         }
 
+        #nullable enable
         private static DirEntry? ReadFolder(string Root, string Current, DirEntry Parent)
         {
             DirEntry? FirstEntry = null;
@@ -59,6 +60,7 @@ namespace S6Packer.Source
 
             return FirstEntry;
         }
+        #nullable disable
 
         public static List<DirEntry> BuildLinearList(DirEntry Root)
         {
@@ -77,13 +79,15 @@ namespace S6Packer.Source
         }
     }
 
+    #nullable enable
     public class DirEntry
     {
-        public string Path;
+        public string Path = string.Empty;
         public bool IsDirectory;
         public DirEntry? Parent;
         public DirEntry? FirstChild;
         public DirEntry? NextSibling;
         public int DirOffset;
     }
+    #nullable disable
 }
