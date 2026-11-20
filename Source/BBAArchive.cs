@@ -162,7 +162,7 @@ namespace S6Packer.Source
 		private void CalculateDirectoryOffsets(List<DirEntry> Entries, string FolderPath)
 		{
 			uint DirectoryOffset = 0;
-			foreach (var Element in Entries.AsEnumerable().Reverse())
+			foreach (var Element in Entries)
 			{
 				Element.DirOffset = (int)DirectoryOffset;
 				string SanitizedPath = Utility.SanitizePath(FolderPath, Path.Combine(FolderPath, Element.Path));
@@ -180,7 +180,7 @@ namespace S6Packer.Source
 			DummyBuffer.Clear();
 
 			MemoryStream FileDataStream = new();
-			foreach (var Element in Entries.AsEnumerable().Reverse())
+			foreach (var Element in Entries)
 			{
 				BBADataEntry Entry;
 				string ElementPath = Path.Combine(FolderPath, Element.Path);
