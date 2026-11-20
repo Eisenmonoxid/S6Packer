@@ -39,10 +39,12 @@ namespace S6Packer.Source
         public static bool IsCompressed(string Extension) => CompressedFileTypes.Contains(Extension.TrimStart('.').ToLowerInvariant());
 
 		private BBADataEntryDefinition Definition;
-		public readonly string FileName;
 		public ref BBADataEntryDefinition GetDefinition() => ref Definition;
 		public static readonly int Size = Utility.GetSerializedSize<BBADataEntryDefinition>();
-		public static UInt64 GetTimeStamp(DateTime Date) => BitConverter.ToUInt64(BitConverter.GetBytes(Date.Ticks), 0);
+
+		public readonly string FileName;
+		public static UInt64 GetTimeStamp(DateTime Date) => unchecked((UInt64)Date.ToFileTimeUtc());
+		public static DateTime GetDateTimeFromTimeStamp(UInt64 TimeStamp) => DateTime.FromFileTimeUtc(unchecked((Int64)TimeStamp));
 		public static uint GetPaddedSizeByName(string Name) => GetPaddedSize((uint)Name.Length);
 		public static uint GetPaddedSize(uint Length) => (uint)(Size + Length + (4 - (Length % 4)));
 

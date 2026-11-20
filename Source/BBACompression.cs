@@ -53,15 +53,15 @@ namespace S6Packer.Source
 			return Buffer;
 		}
 
-		public static byte[] Compress(ReadOnlySpan<byte> Data)
+		public static ArraySegment<byte> Compress(ReadOnlySpan<byte> Data)
 		{
 			using MemoryStream Output = new();
-            using ZLibStream Compression = new(Output, CompressionMode.Compress);
+			using (ZLibStream Compression = new(Output, CompressionMode.Compress, leaveOpen: true))
+			{
+				Compression.Write(Data);
+			}
 
-            Compression.Write(Data);
-			Compression.Dispose();
-
-			return Output.ToArray();
+			return new ArraySegment<byte>(Output.GetBuffer(), 0, checked((int)Output.Length));
 		}
     }
 }

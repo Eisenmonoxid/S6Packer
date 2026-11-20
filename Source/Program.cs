@@ -18,9 +18,9 @@ namespace S6Packer.Source
             Console.Title = "S6Packer";
             Console.Clear();
 
-			string Version = Assembly.GetEntryAssembly().GetCustomAttribute<AssemblyFileVersionAttribute>().Version;
+			string Version = Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyFileVersionAttribute>().Version;
             Console.WriteLine("[INFO] S6Packer v" + Version + " - github.com/Eisenmonoxid/S6Packer");
-            Console.WriteLine("[INFO] Currently running on " + RuntimeInformation.OSDescription.ToString());
+            Console.WriteLine("[INFO] Currently running on " + RuntimeInformation.OSDescription.ToString() + " with runtime " + RuntimeInformation.FrameworkDescription);
 
             bool Result = false;
             string ArchiveFilePath = Utility.GetArchiveFileFromArgs(args);

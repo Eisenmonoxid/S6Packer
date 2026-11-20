@@ -4,7 +4,7 @@ A simple command line application that unpacks and packs archive files of the ga
 **This is a full, from the ground up rewrite of [the bba6tool](https://github.com/SettlersDev/bba6tool) originally created by yoq.**
 
 ## Usage
-Unpack: Launch the executable with the path to the .bba|.s6map|.s6xmap file as argument.   
+Unpack: Launch the executable with the path to the .bba|.s6map|.s6xmap|.s6savegame|.s6xsavegame file as argument.   
 Pack: Launch the executable with the path to the folder and `--Type: ` as arguments.   
 (e.g. `S6Packer.exe "C:\Usermap_Extracted" "--Type: .s6xmap"`)   
 `"--Type: .s6xmap"` needs to be enclosed in quotation marks, otherwise the application cannot parse the arguments correctly.

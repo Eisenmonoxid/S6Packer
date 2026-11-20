@@ -3,8 +3,6 @@ using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net;
-using System.Reflection.PortableExecutable;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -56,7 +54,7 @@ namespace S6Packer.Source
 			GlobalHashTable = new BBAFileHashTable(AmountOfHashTableEntries);
 			GlobalHashTable.ParseHashTableFromHeader(HashTableEntriesSpan[4..]);
 
-			Console.WriteLine($"[INFO] Loaded BBArchive with {GlobalDirectory.GetDefinition().NumberOfFiles} files.");
+			Console.WriteLine($"[INFO] Loaded Archive with {AmountOfFiles} files and {AmountOfHashTableEntries} HashTable entries.");
 		}
 
 		public BBAArchiveFile(Stream Archive, string FolderPath, string FileExtension)
@@ -149,15 +147,11 @@ namespace S6Packer.Source
 						Writer.Write(Data);
 					}
 
-					long TimeStamp = (long)Definition.TimeStamp;
-					if (Definition.TimeStamp == 0)
-					{
-						TimeStamp = DateTime.Now.Ticks;
-					}
-
 					new FileInfo(OutputPath)
 					{
-						LastWriteTime = new DateTime(1600, 1, 1).AddTicks(TimeStamp)
+						LastWriteTimeUtc = Definition.TimeStamp == 0
+							? DateTime.UtcNow
+							: BBADataEntry.GetDateTimeFromTimeStamp(Definition.TimeStamp)
 					};
 				}
 			}
@@ -209,18 +203,18 @@ namespace S6Packer.Source
 					FileDataStream.Seek(FileOffset, SeekOrigin.Begin);
 					if (Definition.FileType == (uint)BBADataEntry.BBAArchiveFileType.Compressed)
 					{
-						byte[] CompressedData = BBACompression.Compress(Data);
-						Definition.CompressedFileSize = (uint)(CompressedData.Length + FHOffset);
+						ArraySegment<byte> CompressedData = BBACompression.Compress(Data);
+						Definition.CompressedFileSize = (uint)(CompressedData.Count + FHOffset);
 
 						FileDataStream.Write(DummyBuffer);
-						FileDataStream.Write(CompressedData);
+						FileDataStream.Write(CompressedData.AsSpan());
 						FileDataStream.Seek(FileOffset, SeekOrigin.Begin);
 
 						// Write File Header
 						byte[] FileHeader = WriteFileHeader(ref Definition, CompressedData.AsSpan()[..FHOffset]);
 						FileDataStream.Write(FileHeader);
 
-						Definition.CompressedCRC32 = Utility.GetCombinedCRC32OfData(FileHeader, CompressedData);
+						Definition.CompressedCRC32 = Utility.GetCombinedCRC32OfData(FileHeader, CompressedData.AsSpan());
 					}
 					else
 					{
@@ -312,7 +306,7 @@ namespace S6Packer.Source
 			return DataEntry;
         }
 
-		private ReadOnlySpan<byte> ReadDataEntryFromArchive(BBADataEntry DataEntry)
+		private byte[] ReadDataEntryFromArchive(BBADataEntry DataEntry)
 		{
 			ref BBADataEntryDefinition Definition = ref DataEntry.GetDefinition();
 
@@ -333,7 +327,7 @@ namespace S6Packer.Source
 			}
 		}
 
-		private ReadOnlySpan<byte> DecompressDataEntryFromArchive(ref BBADataEntryDefinition Definition)
+		private byte[] DecompressDataEntryFromArchive(ref BBADataEntryDefinition Definition)
 		{
 			int USize = sizeof(UInt32);
 			int FileHeaderSize = Utility.GetSerializedSize<BBAArchiveFileHeaderDefinition>();
@@ -348,7 +342,18 @@ namespace S6Packer.Source
 
 			GlobalArchiveReader.BaseStream.Position = Definition.FileOffset + (USize * 2); // Skip first two uints of file header
 
-			byte[] Source = GlobalArchiveReader.ReadBytes((int)Definition.CompressedFileSize);
+			const uint FileDataHeaderSize = sizeof(uint) * 2;
+			if (Definition.CompressedFileSize < FileDataHeaderSize * 2)
+			{
+				throw new InvalidDataException($"Compressed entry size {Definition.CompressedFileSize} is too small to contain its archive header and compressed data header.");
+			}
+
+			int CompressedDataSize = checked((int)(Definition.CompressedFileSize - FileDataHeaderSize));
+			byte[] Source = GlobalArchiveReader.ReadBytes(CompressedDataSize);
+			if (Source.Length != CompressedDataSize)
+			{
+				throw new EndOfStreamException($"Expected {CompressedDataSize} compressed bytes, got {Source.Length}.");
+			}
 
 			BinaryPrimitives.WriteUInt32LittleEndian(Source.AsSpan()[.. USize], Data[2]);
 			BinaryPrimitives.WriteUInt32LittleEndian(Source.AsSpan()[USize .. (USize * 2)], Data[3]);
@@ -419,17 +424,17 @@ namespace S6Packer.Source
 			Span<byte> SerializedHashTableData = GlobalHashTable.SerializeHashTable(GlobalFileData);
 			Span<byte> SerializedFileData = GetSerializedFileData();
 			Span<byte> DecompressedHeaderData = GetDecompressedHeaderData(IsArchiveFileOrMap, SerializedFileData, SerializedHashTableData);
-			Span<byte> CompressedHeaderData = BBACompression.Compress(DecompressedHeaderData);
+			ArraySegment<byte> CompressedHeaderData = BBACompression.Compress(DecompressedHeaderData);
 
 			CompressedHeaderDefinition CompressedHeader = new()
 			{
 				DecompressedSize = (uint)DecompressedHeaderData.Length,
-				CompressedSize = (uint)CompressedHeaderData.Length,
+				CompressedSize = (uint)CompressedHeaderData.Count,
 			};
 
 			byte[] CompressedHeaderBytes = new byte[BBACompression.Size];
 			MemoryMarshal.Write(CompressedHeaderBytes, in CompressedHeader);
-			Span<byte> FileDictionaryData = GetEncryptedFileDictionary(IsArchiveFileOrMap, CompressedHeaderBytes, CompressedHeaderData);
+			Span<byte> FileDictionaryData = GetEncryptedFileDictionary(IsArchiveFileOrMap, CompressedHeaderBytes, CompressedHeaderData.AsSpan());
 			uint CRC32 = Utility.GetCRC32OfData(FileDictionaryData);
 
 			UInt32 Offset = (uint)(BBAHeader.Size + BBADirectoryHeader.Size + FileDataStream.Length);
@@ -473,8 +478,7 @@ namespace S6Packer.Source
 				return null;
 			}
 
-			ReadOnlySpan<byte> Data = ReadDataEntryFromArchive(DataEntry);
-			return Data.ToArray();
+			return ReadDataEntryFromArchive(DataEntry);
 		}
 	}
 }

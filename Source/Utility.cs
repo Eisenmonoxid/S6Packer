@@ -14,7 +14,7 @@ namespace S6Packer.Source
 		
 		public static UInt64 GetLastWriteTimeFromFileOrDirectory(string FileOrDirectoryPath)
 		{
-			Func<string, DateTime> GetWriteTime = File.Exists(FileOrDirectoryPath) ? File.GetLastWriteTime : Directory.GetLastWriteTime;
+			Func<string, DateTime> GetWriteTime = File.Exists(FileOrDirectoryPath) ? File.GetLastWriteTimeUtc : Directory.GetLastWriteTimeUtc;
 			try
 			{
 				return BBADataEntry.GetTimeStamp(GetWriteTime(FileOrDirectoryPath));
