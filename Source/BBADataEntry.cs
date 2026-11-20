@@ -57,7 +57,11 @@ namespace S6Packer.Source
 		public BBADataEntry(string Name)
 		{
 			FileName = Name;
-			Definition = new BBADataEntryDefinition();
+			Definition = new BBADataEntryDefinition
+			{
+				FirstChild = -1,
+				NextSibling = -1
+			};
 		}
 
         public ReadOnlySpan<byte> Serialize()

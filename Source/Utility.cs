@@ -66,7 +66,7 @@ namespace S6Packer.Source
 			return CRC.GetCurrentHashAsUInt32();
 		}
 
-        private static readonly string[] Extensions = [".bba", ".s6map", ".s6xmap", ".s6savegame", ".s6xsavegame"];
+        public static readonly string[] Extensions = [".bba", ".s6map", ".s6xmap", ".s6savegame", ".s6xsavegame"];
         public static string GetArchiveFileFromArgs(string[] args) => 
 			args.FirstOrDefault(Element => Extensions.Any(Extension => 
 				Element.EndsWith(Extension, StringComparison.OrdinalIgnoreCase)) && File.Exists(Element));

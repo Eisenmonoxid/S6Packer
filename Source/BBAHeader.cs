@@ -19,6 +19,7 @@ namespace S6Packer.Source
 		public ref BBAHeaderDefinition GetDefinition() => ref Definition;
 		public ReadOnlySpan<byte> Serialize() => Utility.Serialize(Definition);
 		public static readonly int Size = Utility.GetSerializedSize<BBAHeaderDefinition>();
+		public static ReadOnlySpan<byte> Magic => "BAF"u8;
 
 		public BBAHeader(ReadOnlySpan<byte> Data)
 		{
@@ -39,7 +40,7 @@ namespace S6Packer.Source
 			{
 				fixed (byte* Pointer = Definition.Header)
 				{
-        			"BAF"u8.CopyTo(new Span<byte>(Pointer, 3));
+					Magic.CopyTo(new Span<byte>(Pointer, 3));
 				}
 			}
 		}

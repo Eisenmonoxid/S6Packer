@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 
 namespace S6Packer.Source
 {
@@ -11,39 +10,30 @@ namespace S6Packer.Source
             var RootEntry = new DirEntry
             {
                 Path = ".",
-                IsDirectory = true
+                IsDirectory = true,
+                FirstChild = ReadFolder(Root, Root)
             };
-
-            RootEntry.FirstChild = ReadFolder(Root, Root, RootEntry);
+            
             return RootEntry;
         }
 
         #nullable enable
-        private static DirEntry? ReadFolder(string Root, string Current, DirEntry Parent)
+        private static DirEntry? ReadFolder(string Root, string Current)
         {
             DirEntry? FirstEntry = null;
             DirEntry? PreviousEntry = null;
-            List<string> Entries;
-
-            try
-            {
-                Entries = [.. Directory.EnumerateFileSystemEntries(Current)];
-            }
-            catch
-            {
-                return null;
-            }
+            List<string> Entries = [.. Directory.EnumerateFileSystemEntries(Current)];
 
             foreach (string Entry in Entries)
             {
-                if (Path.GetFileName(Entry).StartsWith('.'))
+                string Name = Path.GetFileName(Entry);
+                if (Name is "." or "..")
                 {
                     continue;
                 }
 
                 var Node = new DirEntry
                 {
-                    Parent = Parent,
                     IsDirectory = Directory.Exists(Entry),
                     Path = Path.GetRelativePath(Root, Entry).ToLowerInvariant()
                 };
@@ -54,7 +44,7 @@ namespace S6Packer.Source
 
                 if (Node.IsDirectory)
                 {
-                    Node.FirstChild = ReadFolder(Root, Entry, Node);
+                    Node.FirstChild = ReadFolder(Root, Entry);
                 }
             }
 
@@ -84,7 +74,6 @@ namespace S6Packer.Source
     {
         public string Path = string.Empty;
         public bool IsDirectory;
-        public DirEntry? Parent;
         public DirEntry? FirstChild;
         public DirEntry? NextSibling;
         public int DirOffset;

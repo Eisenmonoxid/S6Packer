@@ -10,7 +10,6 @@ namespace S6Packer.Source
     #if S6PACKER_STANDALONE_COMPILATION
 	internal class Program
 	{
-        
         static void Main(string[] args)
 		{
 			Console.ForegroundColor = ConsoleColor.White;
@@ -31,7 +30,7 @@ namespace S6Packer.Source
             else
             {
                 string FolderPath = args.FirstOrDefault(Element => Directory.Exists(Element));
-                string FileExtension = args.FirstOrDefault(Element => Element.StartsWith("--Type: "));
+                string FileExtension = args.FirstOrDefault(Element => Element.StartsWith("--Type:"));
                 if (FolderPath != default && FileExtension != default)
                 {
                     Result = Pack(FolderPath, FileExtension);
@@ -53,15 +52,38 @@ namespace S6Packer.Source
         {
             Stopwatch Watch = new();
             DirectoryInfo Info = new(FolderPath);
+            byte[] ArchivePrefix = [];
 
-            FileExtension = FileExtension.Replace("--Type: ", "");
-            if (FileExtension != ".bba" && FileExtension != ".s6map" && FileExtension != ".s6xmap")
+            FileExtension = FileExtension.Replace("--Type:", "").Trim().ToLowerInvariant();
+            if (!Utility.Extensions.Contains(FileExtension, StringComparer.OrdinalIgnoreCase))
             {
-                Console.WriteLine("[ERROR] File Extension for packing must either be .bba, .s6map or .s6xmap. Given Extension was: " + FileExtension);
+                Console.WriteLine("[ERROR] Unsupported file extension for packing: " + FileExtension);
                 return false;
             }
 
 			string OutputFilePath = Path.Combine(Info.Parent.FullName, Info.Name.Replace("_Extracted", "") + FileExtension);
+            bool IsArchiveFileOrMap = FileExtension == ".bba";
+
+            if (FileExtension is ".s6savegame" or ".s6xsavegame")
+            {
+                if (!File.Exists(OutputFilePath))
+                {
+                    Console.WriteLine("[ERROR] Savegame packing requires the original savegame beside the extracted folder so its wrapper metadata can be preserved: " + OutputFilePath);
+                    return false;
+                }
+
+                try
+                {
+                    using FileStream Template = File.OpenRead(OutputFilePath);
+                    (ArchivePrefix, IsArchiveFileOrMap) = BBAArchiveFile.ReadPackingTemplate(Template);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("[ERROR] Could not read savegame template: " + ex.Message);
+                    return false;
+                }
+            }
+
             FileStream Stream;
             try
             {
@@ -76,8 +98,11 @@ namespace S6Packer.Source
             Console.WriteLine("[INFO] Packing folder content " + FolderPath + " to archive file " + Stream.Name);
 
             Watch.Start();
-            new BBAArchiveFile(Stream, FolderPath, FileExtension);
-            Stream.Dispose();
+            using (Stream)
+            {
+                Stream.Write(ArchivePrefix);
+                new BBAArchiveFile(Stream, FolderPath, FileExtension, (uint)ArchivePrefix.Length, IsArchiveFileOrMap);
+            }
             Watch.Stop();
 
             Console.WriteLine("[INFO] Operation took " + Watch.ElapsedMilliseconds + " ms.");

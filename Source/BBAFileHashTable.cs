@@ -33,6 +33,7 @@ namespace S6Packer.Source
 
 		public Span<byte> SerializeHashTable(BBADataEntry[] Files)
 		{
+			bool[] Occupied = new bool[HashTableData.Length];
 			uint Mask = AmountOfHashTableEntries - 1;
 			uint Offset = 0;
 			for (int i = 0; i < Files.Length; i++)
@@ -42,20 +43,21 @@ namespace S6Packer.Source
 				UInt32 Hash = Utility.GetCRC32OfData(FileNameData);
 				uint HashTableIndex = Hash & Mask;
 
-				while (HashTableData[HashTableIndex].Offset != 0)
+				while (Occupied[HashTableIndex])
 				{
 					HashTableIndex = (HashTableIndex + 1) & Mask;
 				}
 
     			HashTableData[HashTableIndex].CRC32 = Hash;
     			HashTableData[HashTableIndex].Offset = Offset;
+				Occupied[HashTableIndex] = true;
 
 				Offset += BBADataEntry.GetPaddedSize(DataEntry.GetDefinition().FileNameLength);
 			}
 			
 			return MemoryMarshal.AsBytes(HashTableData.AsSpan());
 		}
-		
+
 		public void LinkHashTableEntriesToDataEntries(Span<BBADataEntry> GlobalFileData)
 		{
 			for (int i = 0; i < GlobalFileData.Length; i++)

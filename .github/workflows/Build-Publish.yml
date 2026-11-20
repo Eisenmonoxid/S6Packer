@@ -1,9 +1,9 @@
-name: Build & Release .NET 10
+name: Build & Release .NET 11
 
 on:
   push:
     tags:
-      - "v*"
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -11,68 +11,66 @@ permissions:
 
 jobs:
   build:
-    name: Build for ${{ matrix.displayName }}
-    runs-on: ${{ matrix.os }}
+    name: Build for ${{matrix.displayName}}
+    runs-on: ${{matrix.os}}
 
     strategy:
-      fail-fast: false
       matrix:
         include:
           - runtime: win-x64
             displayName: Windows-x64
             os: windows-latest
-            zipExt: zip
-
           - runtime: linux-x64
             displayName: Linux-x64
             os: ubuntu-latest
-            zipExt: zip
 
     steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          fetch-depth: 0
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
 
-      - uses: actions/setup-dotnet@v6.0.0
+      - name: Setup .NET 11 SDK
+        uses: actions/setup-dotnet@v6.1.0
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: '11.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore -p:UseNet11=true
+
+      - name: Clean
+        run: dotnet clean -p:UseNet11=true
 
       - name: Publish
-        run: >
-          dotnet publish S6Packer.csproj
-          -c Release
-          -r ${{ matrix.runtime }}
-          -o publish/${{ matrix.runtime }}
-          -p:DebugType=None
-          -p:DebugSymbols=false
-          -p:StripSymbols=true
-
-      - name: Remove PDB files
         shell: bash
         run: |
-          find publish/${{ matrix.runtime }} -name "*.pdb" -delete || true
+          dotnet publish S6Packer.csproj \
+            -c Release \
+            -r ${{matrix.runtime}} \
+            -p:UseNet11=true \
+            -p:SelfContained=true \
+            -p:PublishSingleFile=true \
+            -p:StripSymbols=true \
+            -o ./publish/${{matrix.runtime}}
 
-      - name: Compress (Windows)
-        if: matrix.os == 'windows-latest'
+      - name: Compress publish output (Windows)
+        if: startsWith(matrix.os, 'windows')
         shell: pwsh
         run: |
-          Compress-Archive `
-            -Path "publish/${{ matrix.runtime }}\*" `
-            -DestinationPath "${{ matrix.displayName }}.${{ matrix.zipExt }}" `
-            -CompressionLevel Optimal
+          $src = "publish/${{matrix.runtime}}"
+          $dst = "${{matrix.displayName}}.zip"
+          Compress-Archive -Path "$src\*" -DestinationPath $dst -CompressionLevel Optimal
 
-      - name: Compress (Linux)
-        if: matrix.os == 'ubuntu-latest'
+      - name: Compress publish output (Unix)
+        if: startsWith(matrix.os, 'ubuntu')
         shell: bash
         run: |
-          cd publish/${{ matrix.runtime }}
-          zip -9 -r ../../${{ matrix.displayName }}.${{ matrix.zipExt }} .
+          cd publish/${{matrix.runtime}}
+          zip -9 -r ../../${{matrix.displayName}}.zip .
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v7.0.1
+      - name: Upload compressed artifact
+        uses: actions/upload-artifact@v7.0.2
         with:
-          name: ${{ matrix.displayName }}
-          path: ${{ matrix.displayName }}.${{ matrix.zipExt }}
+          name: dotnet-${{matrix.displayName}}
+          path: ${{matrix.displayName}}.zip
 
   release:
     name: Create GitHub Release
@@ -80,21 +78,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/download-artifact@v8.0.1
+      - name: Download build artifacts
+        uses: actions/download-artifact@v8.0.2
         with:
-          path: artifacts
-          merge-multiple: true
+          path: ./artifacts
 
-      - name: Extract version
-        id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Extract version name
+        id: get_version
+        run: echo "version_name=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v3.0.2
+      - name: Create GitHub Release (Draft)
+        uses: softprops/action-gh-release@v3.0.4
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ steps.version.outputs.version }}
+          name: ${{steps.get_version.outputs.version_name}}
+          tag_name: ${{github.ref_name}}
+          body: "Latest Release."
           draft: true
-          files: artifacts/*.zip
+          prerelease: false
+          files: |
+            ./artifacts/dotnet-Windows-x64/Windows-x64.zip
+            ./artifacts/dotnet-Linux-x64/Linux-x64.zip
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}

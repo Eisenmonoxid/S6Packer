@@ -57,7 +57,7 @@ namespace S6Packer.Source
 			{
 				fixed (byte* Pointer = Definition.ArchiveHeader)
 				{
-        			"BAF"u8.CopyTo(new Span<byte>(Pointer, 3));
+        			BBAHeader.Magic.CopyTo(new Span<byte>(Pointer, 3));
 				}
 
 				fixed (uint* Pointer = Definition.EncryptionIDs)
