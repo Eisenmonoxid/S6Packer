@@ -29,31 +29,14 @@ namespace S6Packer.Source
 
 		public static byte[] Decompress(byte[] Data, int DecompressedSize)
 		{
-			byte[] Buffer = new byte[DecompressedSize];
+			using MemoryStream Output = new(DecompressedSize);
 			using MemoryStream Input = new(Data);
 			using ZLibStream Decompression = new(Input, CompressionMode.Decompress);
-
-			int AmountOfBytesRead = 0;
-			while (AmountOfBytesRead < DecompressedSize)
-			{
-				int AmountRead = Decompression.Read(Buffer, AmountOfBytesRead, DecompressedSize - AmountOfBytesRead);
-				if (AmountRead == 0)
-				{
-					break;
-				}
-
-				AmountOfBytesRead += AmountRead;
-			}
-
-			if (AmountOfBytesRead != DecompressedSize)
-			{
-				throw new InvalidDataException($"Expected {DecompressedSize} bytes, got {AmountOfBytesRead}");
-			}
-
-			return Buffer;
+			Decompression.CopyTo(Output);
+			return new ArraySegment<byte>(Output.GetBuffer(), 0, checked((int)Output.Length)).Array;
 		}
 
-		public static ArraySegment<byte> Compress(ReadOnlySpan<byte> Data)
+		public static byte[] Compress(ReadOnlySpan<byte> Data)
 		{
 			using MemoryStream Output = new();
 			using (ZLibStream Compression = new(Output, CompressionMode.Compress, leaveOpen: true))
@@ -61,7 +44,7 @@ namespace S6Packer.Source
 				Compression.Write(Data);
 			}
 
-			return new ArraySegment<byte>(Output.GetBuffer(), 0, checked((int)Output.Length));
+			return new ArraySegment<byte>(Output.GetBuffer(), 0, checked((int)Output.Length)).Array;
 		}
     }
 }

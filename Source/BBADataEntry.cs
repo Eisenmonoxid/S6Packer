@@ -32,6 +32,7 @@ namespace S6Packer.Source
 		{
 			None = 0,
 			Compressed = 1,
+			ChunkedCompressed = 2,
 			Directory = 256
 		}
 

@@ -44,9 +44,8 @@ namespace S6Packer.Source
 			GlobalDirectory = new BBADirectory(DecompressedHeader);
 
 			uint AmountOfFiles = GlobalDirectory.GetDefinition().NumberOfFiles;
-			GlobalFileData = new BBADataEntry[AmountOfFiles];
 			ReadOnlySpan<byte> DataEntriesSpan = DecompressedHeader[(int)(GlobalDirectory.GetDefinition().OffsetFileEntries + 4)..];
-			ParseDataEntriesFromHeader(DataEntriesSpan, AmountOfFiles);
+			GlobalFileData = ParseDataEntriesFromHeader(DataEntriesSpan, AmountOfFiles);
 
 			ReadOnlySpan<byte> HashTableEntriesSpan = DecompressedHeader[(int)GlobalDirectory.GetDefinition().OffsetFileHashtable..];
 			uint AmountOfHashTableEntries = MemoryMarshal.Read<uint>(HashTableEntriesSpan[..4]);
@@ -98,15 +97,18 @@ namespace S6Packer.Source
 			return Element == 0x0 ? Offset + 0x1 : Offset;
 		}
 
-		private void ParseDataEntriesFromHeader(ReadOnlySpan<byte> Data, uint AmountOfFiles)
+		private static BBADataEntry[] ParseDataEntriesFromHeader(ReadOnlySpan<byte> Data, uint AmountOfFiles)
 		{
+			BBADataEntry[] Entries = new BBADataEntry[AmountOfFiles];
 			int FileEntryOffset = 0;
 			for (uint i = 0; i < AmountOfFiles; i++)
 			{
 				BBADataEntry Element = new(Data[FileEntryOffset..]);
-				GlobalFileData[i] = Element;
+				Entries[i] = Element;
 				FileEntryOffset += (int)BBADataEntry.GetPaddedSize(Element.GetDefinition().FileNameLength);
 			}
+
+			return Entries;
 		}
 
 		public void UnpackAllDataEntriesFromArchive(string ArchiveOutputDirectoryPath)
@@ -136,14 +138,9 @@ namespace S6Packer.Source
 					}
 				    
 					using BinaryWriter Writer = new(CurrentFile, Encoding.UTF8, false);
-					if (!Directory.Exists(Path.GetDirectoryName(OutputPath)))
-					{
-						Directory.CreateDirectory(Path.GetDirectoryName(OutputPath));
-					}
-
 					if (Definition.CompressedFileSize != 0 || Definition.DecompressedFileSize != 0)
 					{
-						ReadOnlySpan<byte> Data = ReadDataEntryFromArchive(Element);
+						byte[] Data = ReadDataEntryFromArchive(Element);
 						Writer.Write(Data);
 					}
 
@@ -193,10 +190,7 @@ namespace S6Packer.Source
 
 					if (Data.Length == 0)
 					{
-						Definition.FirstChild = Element.FirstChild?.DirOffset ?? -1;
-						Definition.NextSibling = Element.NextSibling?.DirOffset ?? -1;
-
-						GlobalFileData[Offset++] = Entry;
+						AddToFileData(Entry, Offset++, Element);
 						continue;
 					}
 
@@ -232,32 +226,38 @@ namespace S6Packer.Source
 				}
 				else				
 				{
-					Console.WriteLine("[ERROR] File or directory " + Element.Path + " does not exist! Skipping ...");
+					Console.WriteLine("[ERROR] File or directory " + Element.Path + " does not exist! Aborting ...");
 					return FileDataStream;
 				}
 
-				ref BBADataEntryDefinition CurrentDefinition = ref Entry.GetDefinition();
-				CurrentDefinition.FirstChild = Element.FirstChild?.DirOffset ?? -1;
-				CurrentDefinition.NextSibling = Element.NextSibling?.DirOffset ?? -1;
-
-				GlobalFileData[Offset++] = Entry;
+				AddToFileData(Entry, Offset++, Element);
 			}
 
 			return FileDataStream;
         }
 
+		private void AddToFileData(BBADataEntry Entry, uint Offset, DirEntry Element)
+		{
+			ref BBADataEntryDefinition Definition = ref Entry.GetDefinition();
+			Definition.FirstChild = Element.FirstChild?.DirOffset ?? -1;
+			Definition.NextSibling = Element.NextSibling?.DirOffset ?? -1;
+			GlobalFileData[Offset] = Entry;
+		}
+
 		private byte[] WriteFileHeader(ref BBADataEntryDefinition Definition, ReadOnlySpan<byte> Data)
 		{
 			int USize = sizeof(UInt32);
+			uint EntryDef = Unsafe.As<BBADataEntryDefinition, uint>(ref Definition);
+
 			BBAArchiveFileHeaderDefinition FileHeader = new()
 			{
 				CompressedSize = Definition.CompressedFileSize - 8,
 				DecompressedSize = Definition.DecompressedFileSize
 			};
 
-			Span<uint> Entry = MemoryMarshal.CreateSpan(ref Unsafe.As<BBADataEntryDefinition, uint>(ref Definition), USize); 
-			Span<BBAArchiveFileHeaderDefinition> FileHeaderDefinition = MemoryMarshal.CreateSpan(ref FileHeader, 1);
-            Span<UInt32> Header = MemoryMarshal.Cast<BBAArchiveFileHeaderDefinition, UInt32>(FileHeaderDefinition);
+			Span<uint> Entry = MemoryMarshal.CreateSpan(ref EntryDef, USize); 
+			Span<BBAArchiveFileHeaderDefinition> FileHeaderDef = MemoryMarshal.CreateSpan(ref FileHeader, 1);
+            Span<UInt32> Header = MemoryMarshal.Cast<BBAArchiveFileHeaderDefinition, UInt32>(FileHeaderDef);
 
 			Header[2] = BinaryPrimitives.ReadUInt32LittleEndian(Data[.. USize]);
 			Header[3] = BinaryPrimitives.ReadUInt32LittleEndian(Data[USize .. (USize * 2)]);
@@ -315,6 +315,10 @@ namespace S6Packer.Source
 			{
 				return DecompressDataEntryFromArchive(ref Definition);
 			}
+			else if (Definition.FileType == (uint)BBADataEntry.BBAArchiveFileType.ChunkedCompressed)
+			{
+				return DecompressChunkedDataEntryFromArchive(ref Definition);
+			}
 			else
 			{
 				int Size = (int)Definition.CompressedFileSize;
@@ -327,10 +331,37 @@ namespace S6Packer.Source
 			}
 		}
 
+		private byte[] DecompressChunkedDataEntryFromArchive(ref BBADataEntryDefinition Definition)
+		{
+			int EncodedSize = (int)Definition.CompressedFileSize;
+			byte[] EncodedData = GlobalArchiveReader.ReadBytes(EncodedSize);
+			using MemoryStream Memory = new((int)Definition.DecompressedFileSize);
+
+			int Offset = 0;
+			while (Offset < EncodedData.Length)
+			{
+				uint EncodedChunkSize = BinaryPrimitives.ReadUInt32LittleEndian(EncodedData.AsSpan(Offset, sizeof(uint)));
+				Offset += sizeof(uint);
+				byte[] EncodedChunk = EncodedData.AsSpan(Offset, (int)EncodedChunkSize).ToArray();
+				Offset += (int)EncodedChunkSize;
+				Span<uint> Header = MemoryMarshal.Cast<byte, uint>(EncodedChunk.AsSpan(0, sizeof(uint) * 4));
+				Crypt.DecryptChunkHeader(Header);
+
+				uint CompressedChunkSize = Header[0];
+				uint DecompressedChunkSize = Header[1];
+				byte[] DecompressedChunk = BBACompression.Decompress(EncodedChunk.AsSpan(sizeof(uint) * 2, 
+					(int)CompressedChunkSize).ToArray(), (int)DecompressedChunkSize);
+				Memory.Write(DecompressedChunk);
+			}
+
+			return new ArraySegment<byte>(Memory.GetBuffer(), 0, checked((int)Memory.Length)).Array;
+		}
+
 		private byte[] DecompressDataEntryFromArchive(ref BBADataEntryDefinition Definition)
 		{
-			int USize = sizeof(UInt32);
+			const int USize = sizeof(UInt32);
 			int FileHeaderSize = Utility.GetSerializedSize<BBAArchiveFileHeaderDefinition>();
+			const uint FileDataHeaderSize = sizeof(uint) * 2;
 			byte[] CurrentFileHeader = new byte[FileHeaderSize];
 
 			GlobalArchiveReader.Read(CurrentFileHeader, 0, FileHeaderSize);
@@ -339,21 +370,10 @@ namespace S6Packer.Source
 			Span<uint> Entry = MemoryMarshal.CreateSpan(ref Unsafe.As<BBADataEntryDefinition, uint>(ref Definition), USize);
 
 			Crypt.DecryptFileHeader(Data, Entry);
-
 			GlobalArchiveReader.BaseStream.Position = Definition.FileOffset + (USize * 2); // Skip first two uints of file header
-
-			const uint FileDataHeaderSize = sizeof(uint) * 2;
-			if (Definition.CompressedFileSize < FileDataHeaderSize * 2)
-			{
-				throw new InvalidDataException($"Compressed entry size {Definition.CompressedFileSize} is too small to contain its archive header and compressed data header.");
-			}
 
 			int CompressedDataSize = checked((int)(Definition.CompressedFileSize - FileDataHeaderSize));
 			byte[] Source = GlobalArchiveReader.ReadBytes(CompressedDataSize);
-			if (Source.Length != CompressedDataSize)
-			{
-				throw new EndOfStreamException($"Expected {CompressedDataSize} compressed bytes, got {Source.Length}.");
-			}
 
 			BinaryPrimitives.WriteUInt32LittleEndian(Source.AsSpan()[.. USize], Data[2]);
 			BinaryPrimitives.WriteUInt32LittleEndian(Source.AsSpan()[USize .. (USize * 2)], Data[3]);
@@ -380,7 +400,7 @@ namespace S6Packer.Source
 				Writer.Write(DataEntry.Serialize());
 			}
 
-			return Memory.ToArray();
+			return new ArraySegment<byte>(Memory.GetBuffer(), 0, checked((int)Memory.Length)).Array;
 		}
 
 		private byte[] GetDecompressedHeaderData(bool IsBBAFile, Span<byte> SerializedFileData, Span<byte> SerializedHashTableData)
@@ -399,7 +419,7 @@ namespace S6Packer.Source
 			Writer.BaseStream.Seek(0, SeekOrigin.Begin);
 			Writer.Write(Directory.Serialize());
 
-			return Memory.ToArray();
+			return new ArraySegment<byte>(Memory.GetBuffer(), 0, checked((int)Memory.Length)).Array;
 		}
 
 		private byte[] GetEncryptedFileDictionary(bool IsBBAFile, byte[] CompressedHeaderBytes, Span<byte> CompressedHeaderData)
@@ -424,17 +444,17 @@ namespace S6Packer.Source
 			Span<byte> SerializedHashTableData = GlobalHashTable.SerializeHashTable(GlobalFileData);
 			Span<byte> SerializedFileData = GetSerializedFileData();
 			Span<byte> DecompressedHeaderData = GetDecompressedHeaderData(IsArchiveFileOrMap, SerializedFileData, SerializedHashTableData);
-			ArraySegment<byte> CompressedHeaderData = BBACompression.Compress(DecompressedHeaderData);
+			Span<byte> CompressedHeaderData = BBACompression.Compress(DecompressedHeaderData);
 
 			CompressedHeaderDefinition CompressedHeader = new()
 			{
 				DecompressedSize = (uint)DecompressedHeaderData.Length,
-				CompressedSize = (uint)CompressedHeaderData.Count,
+				CompressedSize = (uint)CompressedHeaderData.Length,
 			};
 
 			byte[] CompressedHeaderBytes = new byte[BBACompression.Size];
 			MemoryMarshal.Write(CompressedHeaderBytes, in CompressedHeader);
-			Span<byte> FileDictionaryData = GetEncryptedFileDictionary(IsArchiveFileOrMap, CompressedHeaderBytes, CompressedHeaderData.AsSpan());
+			Span<byte> FileDictionaryData = GetEncryptedFileDictionary(IsArchiveFileOrMap, CompressedHeaderBytes, CompressedHeaderData);
 			uint CRC32 = Utility.GetCRC32OfData(FileDictionaryData);
 
 			UInt32 Offset = (uint)(BBAHeader.Size + BBADirectoryHeader.Size + FileDataStream.Length);
@@ -457,19 +477,7 @@ namespace S6Packer.Source
 			ArchiveStream.Flush();
 		}
 
-		private BBADataEntry GetDataEntryByName(string FileName)
-		{
-			foreach (var Element in GlobalFileData)
-			{
-				if (Element.FileName == FileName)
-				{
-					return Element;
-				}
-			}
-
-			return default;
-		}
-
+		private BBADataEntry GetDataEntryByName(string FileName) => GlobalFileData.FirstOrDefault(Name => Name.FileName == FileName);
 		public byte[] GetFileDataByDataEntryName(string FileName)
 		{
 			BBADataEntry DataEntry = GetDataEntryByName(FileName);

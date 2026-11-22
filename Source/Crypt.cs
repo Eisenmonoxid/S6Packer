@@ -21,7 +21,8 @@ namespace S6Packer.Source
 		public const UInt32 S6_MAP_CRYPTID = 0x161680E5;
 		public const UInt32 S6_BBA_CRYPTID = 0x605E90C5;
 		public const UInt32 S6_FILE_CRYPTID = 0x9BB3F065;
-
+		private static readonly UInt32[] S6ChunkHeaderKey = [1, 7, 3, 4];
+		
 		private static readonly UInt32[] S6FileKey =
 		[
 			0xAB0FDAE6,
@@ -150,5 +151,11 @@ namespace S6Packer.Source
 				Data[i] ^= Data[(3 + i) & 3] ^ Entry[i] ^ S6FileKey[3 - i];
 			}
 		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static void DecryptChunkHeader(Span<uint> Data) => DecryptFileHeader(Data, S6ChunkHeaderKey);
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static void EncryptChunkHeader(Span<uint> Data) => EncryptFileHeader(Data, S6ChunkHeaderKey);
 	}
 }
