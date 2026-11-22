@@ -167,70 +167,85 @@ namespace S6Packer.Source
 			}
 		}
 
+		private void AddCompressedDataFileToStream(ReadOnlySpan<byte> Data, MemoryStream FileDataStream, BBADataEntry Entry, UInt32 FileOffset)
+		{
+			ref BBADataEntryDefinition Definition = ref Entry.GetDefinition();
+			int FHOffset = sizeof(UInt32) * 2; // 8 bytes for compressed file header
+			Span<byte> DummyBuffer = new byte[FHOffset];
+
+			byte[] CompressedData = BBACompression.Compress(Data);
+			Definition.CompressedFileSize = (uint)(CompressedData.Length + FHOffset);
+
+			FileDataStream.Write(DummyBuffer);
+			FileDataStream.Write(CompressedData.AsSpan());
+			FileDataStream.Seek(FileOffset, SeekOrigin.Begin);
+
+			// Write File Header
+			byte[] FileHeader = WriteFileHeader(ref Definition, CompressedData.AsSpan()[..FHOffset]);
+			FileDataStream.Write(FileHeader);
+
+			Definition.CompressedCRC32 = Utility.GetCombinedCRC32OfData(FileHeader, CompressedData.AsSpan());
+		}
+
+		private (BBADataEntry, byte[]) CreateBBADataEntryWrapper(string FolderPath, DirEntry Element, uint Offset)
+		{
+			byte[] Data;
+			BBADataEntry Entry;
+
+			string ElementPath = Path.Combine(FolderPath, Element.Path);
+			if (!File.Exists(ElementPath) && Directory.Exists(ElementPath))
+			{
+				Entry = CreateBBADataEntryForDirectory(FolderPath, ElementPath);
+				AddToFileData(Entry, Offset, Element);
+				return (Entry, null);
+			}
+
+			try
+			{
+				Data = File.ReadAllBytes(ElementPath);
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine("[ERROR] File " + ElementPath + " could not be opened! " + ex.Message);
+				return (null, null);
+			}
+
+			Entry = CreateBBADataEntry(Data, FolderPath, ElementPath);
+			AddToFileData(Entry, Offset, Element);
+
+			return (Entry, Data);
+		}
+
 		public MemoryStream PackFolderFilesIntoArchiveFile(List<DirEntry> Entries, string FolderPath)
         {
             uint Offset = 0;
 			uint FileOffset = 0;
-			int FHOffset = sizeof(UInt32) * 2; // 8 bytes for compressed file header
-
-			Span<byte> DummyBuffer = new byte[FHOffset];
-			DummyBuffer.Clear();
-
 			MemoryStream FileDataStream = new();
+
 			foreach (var Element in Entries)
 			{
-				BBADataEntry Entry;
-				string ElementPath = Path.Combine(FolderPath, Element.Path);
-
-                if (File.Exists(ElementPath))
-                {
-					byte[] Data = File.ReadAllBytes(ElementPath);
-					Entry = CreateBBADataEntry(Data, FolderPath, ElementPath);
-					ref BBADataEntryDefinition Definition = ref Entry.GetDefinition();
-
-					if (Data.Length == 0)
-					{
-						AddToFileData(Entry, Offset++, Element);
-						continue;
-					}
-
-					FileDataStream.Seek(FileOffset, SeekOrigin.Begin);
-					if (Definition.FileType == (uint)BBADataEntry.BBAArchiveFileType.Compressed)
-					{
-						ArraySegment<byte> CompressedData = BBACompression.Compress(Data);
-						Definition.CompressedFileSize = (uint)(CompressedData.Count + FHOffset);
-
-						FileDataStream.Write(DummyBuffer);
-						FileDataStream.Write(CompressedData.AsSpan());
-						FileDataStream.Seek(FileOffset, SeekOrigin.Begin);
-
-						// Write File Header
-						byte[] FileHeader = WriteFileHeader(ref Definition, CompressedData.AsSpan()[..FHOffset]);
-						FileDataStream.Write(FileHeader);
-
-						Definition.CompressedCRC32 = Utility.GetCombinedCRC32OfData(FileHeader, CompressedData.AsSpan());
-					}
-					else
-					{
-						Definition.CompressedFileSize = Definition.DecompressedFileSize;
-						Definition.CompressedCRC32 = Definition.DecompressedCRC32;
-						FileDataStream.Write(Data);
-					}
-
-					Definition.FileOffset = FileOffset;
-					FileOffset += Definition.CompressedFileSize;
-				}
-				else if (Directory.Exists(ElementPath))
+				(BBADataEntry Entry, ReadOnlySpan<byte> Data) = CreateBBADataEntryWrapper(FolderPath, Element, Offset++);
+				if (Entry == null || Entry.GetDefinition().FileType == (uint)BBADataEntry.BBAArchiveFileType.Directory)
 				{
-					Entry = CreateBBADataEntryForDirectory(FolderPath, ElementPath);
-				}
-				else				
-				{
-					Console.WriteLine("[ERROR] File or directory " + Element.Path + " does not exist! Aborting ...");
-					return FileDataStream;
+					continue;
 				}
 
-				AddToFileData(Entry, Offset++, Element);
+				ref BBADataEntryDefinition Definition = ref Entry.GetDefinition();
+				FileDataStream.Seek(FileOffset, SeekOrigin.Begin);
+
+				if (Definition.FileType == (uint)BBADataEntry.BBAArchiveFileType.Compressed)
+				{
+					AddCompressedDataFileToStream(Data, FileDataStream, Entry, FileOffset);
+				}
+				else
+				{
+					Definition.CompressedFileSize = Definition.DecompressedFileSize;
+					Definition.CompressedCRC32 = Definition.DecompressedCRC32;
+					FileDataStream.Write(Data);
+				}
+
+				Definition.FileOffset = FileOffset;
+				FileOffset += Definition.CompressedFileSize;
 			}
 
 			return FileDataStream;
