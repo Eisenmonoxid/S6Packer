@@ -36,7 +36,7 @@ namespace S6Packer.Source
 			Directory = 256
 		}
 
-		private static readonly HashSet<string> CompressedFileTypes = ["xml", "bin", "fdb", "lua", "fx", "anm", "dff", "spt", "dds", "txt", "cs"];
+		private static readonly HashSet<string> CompressedFileTypes = ["anm", "bak", "bin", "bmp", "cs", "dds", "dff", "fx", "ini", "lua", "pub", "spt", "ttf", "txt", "uva", "xml"];
         public static bool IsCompressed(string Extension) => CompressedFileTypes.Contains(Extension.TrimStart('.').ToLowerInvariant());
 
 		private BBADataEntryDefinition Definition;

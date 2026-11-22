@@ -27,24 +27,24 @@ namespace S6Packer.Source
 		public ref CompressedHeaderDefinition GetDefinition() => ref Definition;
 		public static readonly int Size = Utility.GetSerializedSize<CompressedHeaderDefinition>();
 
-		public static byte[] Decompress(byte[] Data, int DecompressedSize)
+		public static ArraySegment<byte> Decompress(byte[] Data, int DecompressedSize)
 		{
 			using MemoryStream Output = new(DecompressedSize);
 			using MemoryStream Input = new(Data);
 			using ZLibStream Decompression = new(Input, CompressionMode.Decompress);
 			Decompression.CopyTo(Output);
-			return new ArraySegment<byte>(Output.GetBuffer(), 0, checked((int)Output.Length)).Array;
+			return new ArraySegment<byte>(Output.GetBuffer(), 0, checked((int)Output.Length));
 		}
 
-		public static byte[] Compress(ReadOnlySpan<byte> Data)
+		public static ArraySegment<byte> Compress(ReadOnlySpan<byte> Data)
 		{
 			using MemoryStream Output = new();
-			using (ZLibStream Compression = new(Output, CompressionMode.Compress, leaveOpen: true))
+			using (ZLibStream Compression = new(Output, CompressionLevel.SmallestSize, leaveOpen: true))
 			{
 				Compression.Write(Data);
 			}
 
-			return new ArraySegment<byte>(Output.GetBuffer(), 0, checked((int)Output.Length)).Array;
+			return new ArraySegment<byte>(Output.GetBuffer(), 0, checked((int)Output.Length));
 		}
     }
 }
