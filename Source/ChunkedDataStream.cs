@@ -17,6 +17,7 @@ namespace S6Packer.Source
         public override bool CanSeek => !_Disposed;
         public override bool CanWrite => !_Disposed;
         public override long Length => _Length;
+        private readonly long MaxStreamLength = uint.MaxValue - (BBAHeader.Size + BBADirectoryHeader.Size);
 
         public override long Position
         {
@@ -25,6 +26,7 @@ namespace S6Packer.Source
             {
                 ThrowIfDisposed();
                 ArgumentOutOfRangeException.ThrowIfNegative(value);
+                ArgumentOutOfRangeException.ThrowIfGreaterThan(value, MaxStreamLength);
                 _Position = value;
             }
         }
@@ -70,6 +72,11 @@ namespace S6Packer.Source
         public override void Write(ReadOnlySpan<byte> Buffer)
         {
             ThrowIfDisposed();
+            if (_Position > MaxStreamLength - Buffer.Length)
+            {
+                throw new IOException("Maximum stream size exceeded.");
+            }
+
             while (!Buffer.IsEmpty)
             {
                 int chunkIndex = (int)(_Position / _ChunkSize);
@@ -139,6 +146,11 @@ namespace S6Packer.Source
         {
             ThrowIfDisposed();
             ArgumentOutOfRangeException.ThrowIfNegative(value);
+
+            if (value > MaxStreamLength)
+            {
+                throw new IOException("Maximum stream size exceeded.");
+            }
 
             int requiredChunks = value == 0 ? 0 : checked((int)((value - 1) / _ChunkSize + 1));
             while (_Chunks.Count < requiredChunks)
