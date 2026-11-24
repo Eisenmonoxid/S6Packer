@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -29,11 +30,25 @@ namespace S6Packer.Source
             }
             else
             {
+                CompressionLevel CompressionLevel = CompressionLevel.SmallestSize;
                 string FolderPath = args.FirstOrDefault(Element => Directory.Exists(Element));
                 string FileExtension = args.FirstOrDefault(Element => Element.StartsWith("--Type:"));
+                string Level = args.FirstOrDefault(Element => Element.StartsWith("--CompressionLevel:"));
+                if (Level != default)
+                {
+                    try
+                    {
+                        CompressionLevel = (CompressionLevel)Convert.ToUInt32(Level.Replace("--CompressionLevel:", ""));
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("[ERROR] Could not parse CompressionLevel! Using: " + CompressionLevel.ToString() + ". Message: " + ex.ToString());
+                    }
+                }
+
                 if (FolderPath != default && FileExtension != default)
                 {
-                    Result = Pack(FolderPath, FileExtension);
+                    Result = Pack(FolderPath, FileExtension, CompressionLevel);
                 }
                 else
                 {
@@ -46,7 +61,7 @@ namespace S6Packer.Source
             return;
 		}
 
-        static bool Pack(string FolderPath, string FileExtension)
+        static bool Pack(string FolderPath, string FileExtension, CompressionLevel Level = CompressionLevel.SmallestSize)
         {
             Stopwatch Watch = new();
             DirectoryInfo Info = new(FolderPath);
@@ -72,16 +87,25 @@ namespace S6Packer.Source
 
             Console.WriteLine("[INFO] Packing folder content " + FolderPath + " to archive file " + Stream.Name);
 
+            bool Result = true;
             Watch.Start();
             using (Stream)
             {
-                new BBAArchiveFile(Stream, FolderPath, FileExtension);
-                Stream.SetLength(Stream.Position);
+                try
+                {
+                    new BBAArchiveFile(Stream, FolderPath, FileExtension, Level);
+                    Stream.SetLength(Stream.Position);
+                }
+                catch (Exception ex)
+                {
+                    Result = false;
+                    Console.WriteLine("[ERROR] " + ex.ToString());
+                }
             }
             Watch.Stop();
 
             Console.WriteLine("[INFO] Operation took " + Watch.ElapsedMilliseconds + " ms.");
-            return true;
+            return Result;
         }
 
         static bool Unpack(string FilePath)

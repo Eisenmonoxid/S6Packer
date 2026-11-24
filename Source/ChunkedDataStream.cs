@@ -17,7 +17,7 @@ namespace S6Packer.Source
         public override bool CanSeek => !_Disposed;
         public override bool CanWrite => !_Disposed;
         public override long Length => _Length;
-        private readonly long MaxStreamLength = uint.MaxValue - (BBAHeader.Size + BBADirectoryHeader.Size);
+        private readonly long MaxStreamLength = UInt32.MaxValue - (BBAHeader.Size + BBADirectoryHeader.Size + BBADirectory.Size);
 
         public override long Position
         {
@@ -195,6 +195,32 @@ namespace S6Packer.Source
             }
 
             base.Dispose(disposing);
+        }
+
+        public bool CopyToAllDataAndDispose(Stream Destination)
+        {
+            try
+            {
+                ThrowIfDisposed();
+                ArgumentNullException.ThrowIfNull(Destination);
+                if (!Destination.CanWrite)
+                {
+                    throw new ArgumentException("Destination stream is not writable.", nameof(Destination));
+                } 
+            }
+            catch
+            {
+                return false;
+            }
+            
+            foreach (MemoryStream Stream in _Chunks)
+            {
+                Stream.Seek(0, SeekOrigin.Begin);
+                Stream.CopyTo(Destination);
+            }
+
+            Dispose();
+            return true;
         }
 
         public override void CopyTo(Stream Destination, int BufferSize)

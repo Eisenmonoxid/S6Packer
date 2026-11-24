@@ -36,10 +36,10 @@ namespace S6Packer.Source
 			return new ArraySegment<byte>(Output.GetBuffer(), 0, checked((int)Output.Length));
 		}
 
-		public static ArraySegment<byte> Compress(ReadOnlySpan<byte> Data)
+		public static ArraySegment<byte> Compress(ReadOnlySpan<byte> Data, CompressionLevel Level)
 		{
 			using MemoryStream Output = new();
-			using (ZLibStream Compression = new(Output, CompressionLevel.SmallestSize, leaveOpen: true))
+			using (ZLibStream Compression = new(Output, Level, leaveOpen: true))
 			{
 				Compression.Write(Data);
 			}
