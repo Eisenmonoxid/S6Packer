@@ -25,18 +25,6 @@ namespace S6Packer.Source
 			}
 		}
 		
-		public static List<string> GetFiles(string Input)
-		{
-			List<string> Files = [.. Directory.GetFiles(Input)];
-			foreach (string Element in Directory.GetDirectories(Input))
-			{
-                Files.Add(Element);
-                Files.AddRange(GetFiles(Element));
-			}
-
-			return Files;
-		}
-
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static ref readonly T Parse<T>(ReadOnlySpan<byte> Buffer) where T : unmanaged => ref MemoryMarshal.AsRef<T>(Buffer);
 

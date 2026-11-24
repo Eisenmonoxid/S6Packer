@@ -35,7 +35,7 @@ namespace S6Packer.Source
                 var Node = new DirEntry
                 {
                     IsDirectory = Directory.Exists(Entry),
-                    Path = Path.GetRelativePath(Root, Entry).ToLowerInvariant()
+                    Path = Path.GetRelativePath(Root, Entry)
                 };
 
                 FirstEntry ??= Node;

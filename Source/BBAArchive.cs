@@ -72,7 +72,7 @@ namespace S6Packer.Source
 			GlobalHashTable = new BBAFileHashTable(HashTableSize);
 
 			CalculateDirectoryOffsets(Entries, FolderPath);
-			MemoryStream FileDataStream = PackFolderFilesIntoArchiveFile(Entries, FolderPath);
+			ChunkedDataStream FileDataStream = PackFolderFilesIntoArchiveFile(Entries, FolderPath);
 			WriteBBAArchiveFileMetadata(FileDataStream);
 		}
 
@@ -167,7 +167,7 @@ namespace S6Packer.Source
 			}
 		}
 
-		private void AddCompressedDataFileToStream(ReadOnlySpan<byte> Data, MemoryStream FileDataStream, BBADataEntry Entry, UInt32 FileOffset)
+		private void AddCompressedDataFileToStream(ReadOnlySpan<byte> Data, ChunkedDataStream FileDataStream, BBADataEntry Entry, UInt32 FileOffset)
 		{
 			ref BBADataEntryDefinition Definition = ref Entry.GetDefinition();
 			int FHOffset = sizeof(UInt32) * 2; // 8 bytes for compressed file header
@@ -216,12 +216,12 @@ namespace S6Packer.Source
 			return (Entry, Data);
 		}
 
-		public MemoryStream PackFolderFilesIntoArchiveFile(List<DirEntry> Entries, string FolderPath)
+		public ChunkedDataStream PackFolderFilesIntoArchiveFile(List<DirEntry> Entries, string FolderPath)
         {
             uint Offset = 0;
 			uint FileOffset = 0;
-			MemoryStream FileDataStream = new();
 
+			ChunkedDataStream FileDataStream = new();
 			foreach (var Element in Entries)
 			{
 				(BBADataEntry Entry, ReadOnlySpan<byte> Data) = CreateBBADataEntryWrapper(FolderPath, Element, Offset++);
@@ -459,7 +459,7 @@ namespace S6Packer.Source
 			return FileDictionary;
 		}
 
-		private void WriteBBAArchiveFileMetadata(MemoryStream FileDataStream)
+		private void WriteBBAArchiveFileMetadata(ChunkedDataStream FileDataStream)
 		{
 			Span<byte> SerializedHashTableData = GlobalHashTable.SerializeHashTable(GlobalFileData);
 			Span<byte> SerializedFileData = GetSerializedFileData();

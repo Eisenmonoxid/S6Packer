@@ -42,9 +42,7 @@ namespace S6Packer.Source
             }
 
             Console.WriteLine("\n[INFO] Finished!" + (!Result ? " One or more errors occured." : " No errors occured."));
-            Console.WriteLine("[INFO] Press any key to exit ...");
-            Console.ReadKey();
-
+            Console.WriteLine("[INFO] Exiting ...");
             return;
 		}
 
